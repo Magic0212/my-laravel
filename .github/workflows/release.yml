@@ -9,11 +9,6 @@ permissions:
   contents: read
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_PHP: ghcr.io/${{ github.repository }}/app-php
-  IMAGE_NGINX: ghcr.io/${{ github.repository }}/app-nginx
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -21,9 +16,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Lấy tên tag (vd: v1.0.3)
       - name: Extract tag
         id: vars
         run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      # Ép lowercase owner/repo và tạo đường dẫn image GHCR (tất cả lowercase)
+      - name: Prepare lowercase image names
+        run: |
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          OWNER_LC="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          REPO_LC="$(echo "$REPO"   | tr '[:upper:]' '[:lower:]')"
+          echo "IMAGE_PHP=ghcr.io/${OWNER_LC}/${REPO_LC}/app-php" >> $GITHUB_ENV
+          echo "IMAGE_NGINX=ghcr.io/${OWNER_LC}/${REPO_LC}/app-nginx" >> $GITHUB_ENV
+
+          # Kiểm tra không còn chữ hoa
+          echo "PHP image: $IMAGE_PHP"
+          echo "NGX image: $IMAGE_NGINX"
+          if echo "$IMAGE_PHP$IMAGE_NGINX" | grep -q '[A-Z]'; then
+            echo "Image path still has uppercase!"; exit 1; fi
 
       - name: Login GHCR
         uses: docker/login-action@v3
@@ -47,38 +59,3 @@ jobs:
           file: infra/docker/nginx/Dockerfile
           push: true
           tags: ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
-
-      - name: Setup SSH
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add host to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Deploy on server
-        env:
-          TAG: ${{ steps.vars.outputs.TAG }}
-          IMAGE_PHP: ${{ env.IMAGE_PHP }}
-          IMAGE_NGINX: ${{ env.IMAGE_NGINX }}
-        run: |
-          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -lc '
-            set -e
-            echo "REGISTRY_IMAGE_PHP='$IMAGE_PHP'" > /opt/laravel/.env.deploy
-            echo "REGISTRY_IMAGE_NGINX='$IMAGE_NGINX'" >> /opt/laravel/.env.deploy
-            echo "TAG='$TAG'" >> /opt/laravel/.env.deploy
-            set -a && source /opt/laravel/.env.deploy && set +a
-
-            docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}' || true
-
-            docker compose -f /opt/laravel/infra/compose/docker-compose.yml pull
-            docker compose -f /opt/laravel/infra/compose/docker-compose.yml up -d
-
-            # Laravel post-deploy
-            docker exec -i app-php php artisan key:generate --force || true
-            docker exec -i app-php php artisan storage:link || true
-            docker exec -i app-php php artisan optimize || true
-            # docker exec -i app-php php artisan migrate --force || true
-          '
