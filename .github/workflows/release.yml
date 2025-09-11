@@ -1,0 +1,84 @@
+name: Release & Deploy (tag)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PHP: ghcr.io/${{ github.repository }}/app-php
+  IMAGE_NGINX: ghcr.io/${{ github.repository }}/app-nginx
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract tag
+        id: vars
+        run: echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & Push PHP-FPM
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/php-fpm/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}
+
+      - name: Build & Push Nginx
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: infra/docker/nginx/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy on server
+        env:
+          TAG: ${{ steps.vars.outputs.TAG }}
+          IMAGE_PHP: ${{ env.IMAGE_PHP }}
+          IMAGE_NGINX: ${{ env.IMAGE_NGINX }}
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} bash -lc '
+            set -e
+            echo "REGISTRY_IMAGE_PHP='$IMAGE_PHP'" > /opt/laravel/.env.deploy
+            echo "REGISTRY_IMAGE_NGINX='$IMAGE_NGINX'" >> /opt/laravel/.env.deploy
+            echo "TAG='$TAG'" >> /opt/laravel/.env.deploy
+            set -a && source /opt/laravel/.env.deploy && set +a
+
+            docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}' || true
+
+            docker compose -f /opt/laravel/infra/compose/docker-compose.yml pull
+            docker compose -f /opt/laravel/infra/compose/docker-compose.yml up -d
+
+            # Laravel post-deploy
+            docker exec -i app-php php artisan key:generate --force || true
+            docker exec -i app-php php artisan storage:link || true
+            docker exec -i app-php php artisan optimize || true
+            # docker exec -i app-php php artisan migrate --force || true
+          '
