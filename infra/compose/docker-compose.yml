@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  app-php:
+    image: ${REGISTRY_IMAGE_PHP}:${TAG}
+    env_file:
+      - /opt/laravel/.env.production
+    volumes:
+      - /opt/laravel/storage:/var/www/html/storage
+    #  - /opt/laravel/bootstrap_cache:/var/www/html/bootstrap/cache
+    networks: [prodnet]
+
+  app-nginx:
+    image: ${REGISTRY_IMAGE_NGINX}:${TAG}
+    ports:
+      - "80:80"
+    depends_on: [app-php]
+    networks: [prodnet]
+
+networks:
+  prodnet:
