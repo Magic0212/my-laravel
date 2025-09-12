@@ -1,0 +1,8 @@
+.git
+infra/compose
+node_modules
+vendor
+storage/*
+!storage/.gitignore
+bootstrap/cache/*
+!bootstrap/cache/.gitignore

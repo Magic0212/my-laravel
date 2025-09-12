@@ -70,6 +70,8 @@ jobs:
           port: ${{ secrets.DO_PORT || 22 }}
           source: "docker-compose.prod.yml"
           target: "/opt/my-laravel/"
+          timeout: 60s
+          command_timeout: 30m
 
       # Deploy to DigitalOcean
       - name: Deploy to DigitalOcean
@@ -79,6 +81,8 @@ jobs:
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           port: ${{ secrets.DO_PORT || 22 }}
+          timeout: 60s
+          command_timeout: 30m
           script: |
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
