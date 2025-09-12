@@ -16,7 +16,7 @@ services:
       - "443:443"
     depends_on: [app-php]
     volumes:
-      - /opt/my-laravel/public:/var/www/html/public
+      - /opt/my-laravel/app:/var/www/html  # Mount toàn bộ source code
     networks: [prodnet]
 
 networks:
