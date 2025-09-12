@@ -105,35 +105,35 @@ jobs:
           command_timeout: 30m
           script: |
             # Tạo thư mục cần thiết
-            sudo mkdir -p /opt/my-laravel/storage
-            sudo mkdir -p /opt/my-laravel/bootstrap/cache
+            mkdir -p /opt/my-laravel/storage
+            mkdir -p /opt/my-laravel/bootstrap/cache
             
             # Cấp quyền cho thư mục
-            sudo chown -R 1000:1000 /opt/my-laravel/storage
-            sudo chown -R 1000:1000 /opt/my-laravel/bootstrap/cache
-            sudo chmod -R 775 /opt/my-laravel/storage
-            sudo chmod -R 775 /opt/my-laravel/bootstrap/cache
+            chown -R 1000:1000 /opt/my-laravel/storage
+            chown -R 1000:1000 /opt/my-laravel/bootstrap/cache
+            chmod -R 775 /opt/my-laravel/storage
+            chmod -R 775 /opt/my-laravel/bootstrap/cache
             
             # Login to GHCR
             echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             # Pull latest images
-            sudo docker pull ${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}
-            sudo docker pull ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
+            docker pull ${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}
+            docker pull ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
             
             # Stop existing containers
-            sudo docker-compose -f /opt/my-laravel/docker-compose.prod.yml down || true
+            docker-compose -f /opt/my-laravel/docker-compose.prod.yml down || true
             
             # Update docker-compose.prod.yml with new image tags
-            sudo sed -i "s|ghcr.io/.*/app-php:.*|${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
-            sudo sed -i "s|ghcr.io/.*/app-nginx:.*|${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
+            sed -i "s|ghcr.io/.*/app-php:.*|${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
+            sed -i "s|ghcr.io/.*/app-nginx:.*|${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
             
             # Start new containers
-            sudo docker-compose -f /opt/my-laravel/docker-compose.prod.yml up -d
+            docker-compose -f /opt/my-laravel/docker-compose.prod.yml up -d
             
             # Kiểm tra containers đang chạy
             echo "=== Running containers ==="
-            sudo docker ps
+            docker ps
             
             # Clean up old images
-            sudo docker image prune -f
+            docker image prune -f
