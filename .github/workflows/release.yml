@@ -49,7 +49,7 @@ jobs:
         with:
           context: .
           file: infra/docker/php-fpm/Dockerfile
-          push: true
+          push: true 
           tags: ${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}
 
       - name: Build & Push Nginx
@@ -59,3 +59,43 @@ jobs:
           file: infra/docker/nginx/Dockerfile
           push: true
           tags: ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
+
+      # Copy docker-compose file to server
+      - name: Copy docker-compose to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_PORT || 22 }}
+          source: "docker-compose.prod.yml"
+          target: "/opt/my-laravel/"
+
+      # Deploy to DigitalOcean
+      - name: Deploy to DigitalOcean
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: ${{ secrets.DO_USERNAME }}
+          key: ${{ secrets.DO_SSH_KEY }}
+          port: ${{ secrets.DO_PORT || 22 }}
+          script: |
+            # Login to GHCR
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull latest images
+            docker pull ${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}
+            docker pull ${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}
+            
+            # Stop existing containers
+            docker-compose -f /opt/my-laravel/docker-compose.prod.yml down || true
+            
+            # Update docker-compose.prod.yml with new image tags
+            sed -i "s|ghcr.io/.*/app-php:.*|${{ env.IMAGE_PHP }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
+            sed -i "s|ghcr.io/.*/app-nginx:.*|${{ env.IMAGE_NGINX }}:${{ steps.vars.outputs.TAG }}|g" /opt/my-laravel/docker-compose.prod.yml
+            
+            # Start new containers
+            docker-compose -f /opt/my-laravel/docker-compose.prod.yml up -d
+            
+            # Clean up old images
+            docker image prune -f
