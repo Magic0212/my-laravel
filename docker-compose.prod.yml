@@ -5,8 +5,8 @@ services:
     env_file:
       - /opt/my-laravel/.env.production
     volumes:
-      - /opt/my-laravel/storage:/var/www/html/storage
-      - /opt/my-laravel/bootstrap/cache:/var/www/html/bootstrap/cache
+      - /opt/my-laravel/storage/logs:/var/www/html/storage/logs
+      - /opt/my-laravel/storage/app:/var/www/html/storage/app
     networks: [prodnet]
 
   app-nginx:
@@ -15,8 +15,6 @@ services:
       - "80:80"
       - "443:443"
     depends_on: [app-php]
-    volumes:
-      - /opt/my-laravel/app:/var/www/html  # Mount toàn bộ source code
     networks: [prodnet]
 
 networks:
